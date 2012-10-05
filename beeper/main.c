@@ -28,20 +28,28 @@ inline unsigned short get_timer_compare(unsigned short freq) {
 void set_speaker(unsigned char speaker, unsigned short freq) {
 	spk_freq[speaker] = freq;
 
-	if (speaker == 0) {
-		return;
-	}
+	volatile unsigned int *t_ccr;
+	volatile unsigned int *t_ctl;
 
 	switch (speaker) {
 	case 0:
-		CCR0 = get_timer_compare(freq);
-		CCTL0 |= CCIE;
+		t_ccr = &TA0CCR0;
+		t_ctl = &TA0CTL;
 		break;
 
 	case 1:
-		CCR1 = get_timer_compare(freq);
-		CCTL1 |= CCIE;
+		t_ccr = &TA1CCR0;
+		t_ctl = &TA1CTL;
 		break;
+	}
+
+	if (freq == 0) {
+		// Служит для выключения звука.
+		*t_ccr = 0;
+		*t_ctl &= ~(MC_1 + MC_2);
+	} else {
+		*t_ccr = get_timer_compare(freq);
+		*t_ctl |= MC_1;
 	}
 }
 
@@ -64,7 +72,6 @@ void cmd_play() {
 	}
 
 	set_speaker(speaker, freq);
-
 }
 
 void (*command_handlers[COMMANDS_COUNT])() = {
@@ -75,18 +82,32 @@ void (*command_handlers[COMMANDS_COUNT])() = {
 	&cmd_play
 }	;
 
+void timers_init() {
+	TA0CCTL0 = CM_0 + CCIS_0 + OUTMOD_4;
+	TA0CTL = TASSEL_2 + ID_1;
+	TA0CCR0 = 999;
+
+	TA1CCTL0 = CM_0 + CCIS_0 + OUTMOD_4;
+	TA1CTL = TASSEL_2 + ID_1;
+	TA1CCR0 = 499;
+}
+
 void main(void) {
 	WDTCTL = WDTPW | WDTHOLD;
 
-	TA0CTL = TASSEL_2 | MC_2 | TAIE;
-	CCTL1 |= CCIE;
+	timers_init();
 
-	// Включить на вывод P1.4 и P1.7
-	P1DIR |= BIT4 + BIT7;
-	P1SEL |= BIT4 + BIT7;
+	P1SEL |= BIT5;
+	P1DIR |= BIT5;
 
-	set_speaker(0, 220);
-	set_speaker(1, 440);
+	P2SEL |= BIT3;
+	P2DIR |= BIT3;
+
+
+	unsigned char i;
+	for (i = 0; i < SPEAKER_COUNT; i++) {
+		set_speaker(i, 0);
+	}
 
 	__enable_interrupt();
 
@@ -110,21 +131,5 @@ void main(void) {
 		if (ch < COMMANDS_COUNT) {
 			command_handlers[ch]();
 		}
-	}
-}
-
-#pragma vector = TIMER0_A1_VECTOR
-__interrupt void TIMER1_ISR(void) {
-	switch (TA0IV) {
-	// CCR1
-	case 2:
-		SPK1_OUT ^= SPK1_PORT;
-		CCR1 += get_timer_compare(spk_freq[0]);
-		break;
-
-	case 4:
-		SPK2_OUT ^= SPK2_PORT;
-		CCR2 += get_timer_compare(spk_freq[1]);
-		break;
 	}
 }
