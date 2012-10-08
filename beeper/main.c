@@ -11,7 +11,7 @@
 #define CMD_HANDSHAKE 0
 #define CMD_PLAY 1
 
-#define F_TCLK 1000000
+#define F_TCLK 500000
 
 #define SPK1_OUT P1OUT
 #define SPK1_PORT BIT7
@@ -21,8 +21,10 @@
 
 unsigned int spk_freq[SPEAKER_COUNT];
 
-inline unsigned short get_timer_compare(unsigned short freq) {
-	return (freq / 2) - 1;
+
+unsigned short get_timer_compare(unsigned short freq) {
+	// return (freq / 2) - 1;
+	return (unsigned short)((F_TCLK / (unsigned int)freq) - 1);
 }
 
 void set_speaker(unsigned char speaker, unsigned short freq) {
@@ -92,6 +94,7 @@ void timers_init() {
 	TA1CCR0 = 499;
 }
 
+// #pragma FUNC_NEVER_RETURNS(main);
 void main(void) {
 	WDTCTL = WDTPW | WDTHOLD;
 
@@ -115,17 +118,6 @@ void main(void) {
 	uart_init();
 
 	while (1) {
-
-//		unsigned short c = uart_getw();
-//
-//
-//		uart_putc(c & 0xFF);
-//
-//		int i = 5000;
-//		while (i--);
-//
-//		uart_putc((c >> 8) & 0xFF);
-
 		unsigned char ch = uart_getc();
 
 		if (ch < COMMANDS_COUNT) {
